@@ -1,0 +1,81 @@
+SQL thuần trong Java (JDBC)
+
+ Đây là gốc — giống SELECT * FROM 
+
+✅ Kết nối DB
+Connection conn = DriverManager.getConnection(
+    "jdbc:mysql://localhost:3306/testdb",
+    "root",
+    ""
+);
+
+✅ SELECT (getComments)
+String sql = "SELECT * FROM comments WHERE video_id = ? ORDER BY created_at DESC";
+
+PreparedStatement stmt = conn.prepareStatement(sql);
+stmt.setInt(1, videoId);
+
+ResultSet rs = stmt.executeQuery();
+
+while (rs.next()) {
+    System.out.println(rs.getString("content"));
+}
+
+✅ INSERT (addComment)
+String sql = "INSERT INTO comments (content, user_id, video_id) VALUES (?, ?, ?)";
+
+PreparedStatement stmt = conn.prepareStatement(sql);
+stmt.setString(1, content);
+stmt.setInt(2, userId);
+stmt.setInt(3, videoId);
+
+stmt.executeUpdate();
+
+------------------------------------
+Connection → kết nối DB
+PreparedStatement → viết SQL
+executeQuery() → SELECT
+executeUpdate() → INSERT/UPDATE/DELETE
+
+----------------------------------------
+
+ORM trong Java (JPA + Hibernate + Spring Boot)
+
+ Đây là chuẩn industry (cực quan trọng nếu bạn theo Java backend)
+
+✅ Entity (giống model)
+@Entity
+public class Comment {
+
+    @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    private Long id;
+
+    private String content;
+    private Long userId;
+    private Long videoId;
+
+    private LocalDateTime createdAt;
+}
+
+✅ Repository
+public interface CommentRepository extends JpaRepository<Comment, Long> {
+
+    List<Comment> findByVideoIdOrderByCreatedAtDesc(Long videoId);
+}
+
+✅ Service / Controller
+
+ addComment
+commentRepository.save(comment);
+
+ getComments
+List<Comment> comments =
+    commentRepository.findByVideoIdOrderByCreatedAtDesc(videoId);
+
+---------
+ SQL phía dưới JPA sẽ tự generate:
+SELECT * FROM comments 
+WHERE video_id = ? 
+ORDER BY created_at DESC;
+--------------
