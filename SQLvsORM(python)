@@ -1,0 +1,39 @@
+PYTHON
+1. SQL thuần (sqlite / psycopg2 / mysql)
+
+-->>getComments
+cursor.execute(
+    "SELECT * FROM comments WHERE video_id = %s ORDER BY created_at DESC",
+    (video_id,)
+)
+
+rows = cursor.fetchall()
+
+->>> insert
+cursor.execute(
+    "INSERT INTO comments (content, user_id, video_id) VALUES (%s, %s, %s)",
+    (content, user_id, video_id)
+)
+conn.commit()
+
+2. ORM (SQLAlchemy)
+
+📌 Model
+class Comment(Base):
+    __tablename__ = 'comments'
+
+    id = Column(Integer, primary_key=True)
+    content = Column(String)
+    user_id = Column(Integer)
+    video_id = Column(Integer)
+
+📌 Query
+addComment
+comment = Comment(content=content, user_id=user_id, video_id=video_id)
+session.add(comment)
+session.commit()
+getComments
+comments = session.query(Comment)\
+    .filter(Comment.video_id == video_id)\
+    .order_by(Comment.created_at.desc())\
+    .all()
