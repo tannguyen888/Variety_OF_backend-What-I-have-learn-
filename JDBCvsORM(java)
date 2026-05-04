@@ -1,0 +1,67 @@
+1. SQL thuần (JDBC)
+
+✅ getComments (giống SELECT * FROM)
+Connection conn = DriverManager.getConnection(url, user, password);
+
+String sql = "SELECT * FROM comments WHERE video_id = ? ORDER BY created_at DESC";
+PreparedStatement stmt = conn.prepareStatement(sql);
+stmt.setInt(1, videoId);
+
+ResultSet rs = stmt.executeQuery();
+
+while (rs.next()) {
+    System.out.println(rs.getString("content"));
+}
+
+
+✅ insert comment
+String sql = "INSERT INTO comments (content, user_id, video_id) VALUES (?, ?, ?)";
+PreparedStatement stmt = conn.prepareStatement(sql);
+
+stmt.setString(1, content);
+stmt.setInt(2, userId);
+stmt.setInt(3, videoId);
+
+stmt.executeUpdate();
+
+-------------------------------------------------------------------------------------------------------------
+
+
+2. ORM (Spring Boot + JPA / Hibernate)
+
+📌 Entity
+@Entity
+public class Comment {
+    @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    private Long id;
+
+    private String content;
+    private Long userId;
+    private Long videoId;
+}
+
+
+📌 Repository
+public interface CommentRepository extends JpaRepository<Comment, Long> {
+    List<Comment> findByVideoIdOrderByCreatedAtDesc(Long videoId);
+}
+
+
+
+📌
+ Controller / Service
+// addComment
+commentRepository.save(comment);
+
+// getComments
+List<Comment> comments = commentRepository
+    .findByVideoIdOrderByCreatedAtDesc(videoId);
+
+👉 JPA sẽ tự generate SQL kiểu:
+
+SELECT * FROM comments WHERE video_id = ? ORDER BY created_at DESC;
+-------------------------------------------------------------------------------------------------------
+
+
+
