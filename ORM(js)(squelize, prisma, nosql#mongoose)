@@ -1,0 +1,270 @@
+ORM: ORM kiểu gần SQL hơn
+ví dụ trong dự án tổng quan: node.js, express.js, mySQL, react.js, scss
+-khi viết model + controller thì thường sẽ sử dụng prisma, hoặc squelize
+--> ORM không phải là “không dùng SQL”
+Nó là viết JS → convert thành SQL phía dưới
+---PRISMA
+prisma.comment.findMany({
+  where: { videoId: 10 }
+});
+
+_>>> Thực tế nó chạy:
+
+SELECT * FROM Comment WHERE videoId = 10;
+
+đây là bản học nhanh cách viết của dự án backend tiktok
+cấu trúc là express, cors, mongoose
+->> model: sẽ là trông như thế này:
+/////////////////////////////////////////////////////////////
+import mongoose from 'mongoose';
+
+// TODO: commentSchema gồm các fields:
+//   - content: String, required
+//   - video: ObjectId ref Video, required
+//   - user: ObjectId ref User, required
+//   - timestamps: true
+const commentSchema = new mongoose.Schema({
+    content: { 
+        type: String, 
+        required: true  },
+    video: { type: mongoose.Schema.Types.ObjectId, 
+        ref: 'Video', 
+        required: true },
+    user: { type: mongoose.Schema.Types.ObjectId, 
+        ref: 'User', 
+        required: true },
+}, { timestamps: true });
+
+
+
+// TODO: module.exports = mongoose.model('Comment', commentSchema)
+model.exports = mongoose.model('Comment', commentSchema);
+////////////////////////////////////////////////////////////////////////
+
+controller; sẽ như thế này
+/////////////////////////////////////////////////////////////////////////////////////////////////////
+// TODO: import Comment model
+//viết theo dạng ORM dùng cho mongose, không viết raw query
+import Comment from '../models/commentModel.js';
+
+// TODO: addComment - nhận content từ req.body -> tạo comment với videoId và userId -> populate user
+const addComment = async (req, res) =>{
+    const content = req.body.content;
+    const comment = new Comment({
+        videoId: req.params.videoId,
+        userId: req.user.id,
+        content: content
+    })
+    try {
+        const savedComment = await comment.save();
+        const populatedComment = await savedComment.populate('userId');
+        res.status(201).json(populatedComment);
+    } catch (error) {
+        res.status(500).json({ message: 'Internal server error' });
+    }
+}
+// TODO: getComments - lấy tất cả comment của video theo videoId, populate user, sắp xếp mới nhất trước 
+const getComments = async (req, res) =>{
+    try{
+        const comments = await Comment.find({ videoId: req.params.videoId })
+        .populate('userId')
+        .sort({ createdAt: -1 });
+        res.status(200).json(comments);
+    }catch (error) {
+        return res.status(500).json({ message: 'Internal server error' });
+    }
+}
+// TODO: deleteComment - tìm comment -> kiểm tra quyền sở hữu -> xóa
+  const deleteComment = async (req, res) =>{
+    try{
+        const comment = await Comment.findById(req.params.id);
+        if(!comment){
+            return res.status(404).json({ message: 'Comment not found' });
+
+        }
+        const userId = req.user.id;
+        if(comment.userId.toString() == userId){
+            await comment.delete();
+            return res.status(200).json({ message: 'Comment deleted' });
+        }
+    }
+    catch(error)
+    {
+        return res.status(500).json({ message: 'Internal server error' });
+    }
+
+    }
+// TODO: module.exports = { addComment, getComments, deleteComment }
+///////////////////////////////////////////////////////////////////////////////
+
+
+squelize: trông như thế này 
+
+📌 Model:
+export default (sequelize, DataTypes) => {
+  const Comment = sequelize.define('Comment', {
+    content: DataTypes.TEXT
+  });
+
+  Comment.associate = (models) => {
+    Comment.belongsTo(models.User, { foreignKey: 'userId' });
+    Comment.belongsTo(models.Video, { foreignKey: 'videoId' });
+  };
+
+  return Comment;
+};
+//////////////////////////////////////////////////////
+controller: trông như vầy 
+✅ addComment
+const comment = await db.Comment.create({
+  content: req.body.content,
+  userId: req.user.id,
+  videoId: req.params.videoId
+});
+
+const result = await db.Comment.findByPk(comment.id, {
+  include: [{ model: db.User }]
+});
+
+res.json(result);
+--------------------------------------------------------------
+✅ getComments
+const comments = await db.Comment.findAll({
+  where: { videoId: req.params.videoId },
+  include: [{ model: db.User }],
+  order: [['createdAt', 'DESC']]
+});
+
+res.json(comments);
+///////////////////////////////////////////////////////////////////////
+
+3. Prisma (hiện đại, gọn nhất)
+📌 schema.prisma
+model Comment {
+  id        Int      @id @default(autoincrement())
+  content   String
+  userId    Int
+  videoId   Int
+  createdAt DateTime @default(now())
+
+  user  User  @relation(fields: [userId], references: [id])
+}
+-------------------------------------------------------------------
+✅ addComment
+const comment = await prisma.comment.create({
+  data: {
+    content: req.body.content,
+    userId: req.user.id,
+    videoId: Number(req.params.videoId)
+  },
+  include: {
+    user: true
+  }
+});
+
+res.json(comment);
+--------------------------------------------------------
+✅ getComments
+const comments = await prisma.comment.findMany({
+  where: {
+    videoId: Number(req.params.videoId)
+  },
+  include: {
+    user: true
+  },
+  orderBy: {
+    createdAt: 'desc'
+  }
+});
+
+res.json(comments);
+//////////////////////////////////////////////////////////////////
+
+tổng quan cách sử dụng: no sql của mongoose
+➕ Thêm
+await Comment.create({
+  content: "Nice",
+  userId: userId,
+  videoId: videoId
+});
+
+🔍 Lấy dữ liệu
+await Comment.find({ videoId })
+  .populate('userId')
+  .sort({ createdAt: -1 });
+🧠 Cách nhớ nhanh
+Tạo: create()
+Lấy: find()
+Join: populate()
+
+👉 Giống JSON object → rất dễ
+///////////////////////////////////////////////////////////
+tổng quan cách sử dụng: no sql của mongoose
+2. Sequelize (SQL nhưng viết JS)
+✅ Bước 1: define model
+const Comment = sequelize.define('Comment', {
+  content: DataTypes.TEXT
+});
+
+Comment.belongsTo(User, { foreignKey: 'userId' });
+✅ Bước 2: dùng
+➕ Thêm
+await Comment.create({
+  content: "Nice",
+  userId,
+  videoId
+});
+
+🔍 Lấy dữ liệu + join
+await Comment.findAll({
+  where: { videoId },
+  include: [{ model: User }],
+  order: [['createdAt', 'DESC']]
+});
+
+🧠 Cách nhớ nhanh
+Tạo: create()
+Lấy: findAll()
+Join: include
+Where: where: {}
+
+👉 Giống SQL nhưng viết bằng object
+///////////////////////////////////////////////////////
+
+
+3. Prisma (dễ nhất, hiện đại)
+✅ Bước 1: schema
+model Comment {
+  id      Int    @id @default(autoincrement())
+  content String
+  userId  Int
+  videoId Int
+
+  user User @relation(fields: [userId], references: [id])
+}
+
+✅ Bước 2: dùng
+➕ Thêm
+await prisma.comment.create({
+  data: {
+    content: "Nice",
+    userId,
+    videoId
+  }
+});
+
+🔍 Lấy dữ liệu
+await prisma.comment.findMany({
+  where: { videoId },
+  include: { user: true },
+  orderBy: { createdAt: 'desc' }
+});
+
+🧠 Cách nhớ nhanh
+Tạo: create({ data })
+Lấy: findMany()
+Join: include
+Order: orderBy
+
+👉 Clean nhất, dễ đọc nhất
+//////////////////////////////////////////////////////////////
