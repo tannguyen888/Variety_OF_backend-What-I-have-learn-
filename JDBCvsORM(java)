@@ -62,6 +62,185 @@ List<Comment> comments = commentRepository
 
 SELECT * FROM comments WHERE video_id = ? ORDER BY created_at DESC;
 -------------------------------------------------------------------------------------------------------
+ví dụ vói hospital db
+flow làm việc 
+1. Entity
+
+@Entity
+class Doctor {
+    @Id
+    Long id;
+}
+
+2. Repository
+
+@Repository
+public interface DoctorRepository extends JpaRepository<Doctor, Long> {
+
+    @Query("""
+        SELECT d FROM Doctor d
+        JOIN d.specialties s
+        WHERE s.name = :name
+    """)
+    List<Doctor> findBySpecialtyName(@Param("name") String name);
+}
+
+3. Service
+
+public interface DoctorService {
+    List<Doctor> getDoctorsBySpecialty(String specialty);
+}
 
 
+Implementation
+@Service
+public class DoctorServiceImpl implements DoctorService {
+
+    private final DoctorRepository doctorRepository;
+
+    public DoctorServiceImpl(DoctorRepository doctorRepository) {
+        this.doctorRepository = doctorRepository;
+    }
+
+    @Override
+    public List<Doctor> getDoctorsBySpecialty(String specialty) {
+        if (specialty == null || specialty.isEmpty()) {
+            return doctorRepository.findAll();
+        }
+        return doctorRepository.findBySpecialtyName(specialty);
+    }
+}
+
+4. Controller
+
+@RestController
+@RequestMapping("/api/doctors")
+@CrossOrigin(origins = "*")
+public class DoctorController {
+
+    private final DoctorService doctorService;
+
+    public DoctorController(DoctorService doctorService) {
+        this.doctorService = doctorService;
+    }
+
+    @GetMapping
+    public ResponseEntity<List<Doctor>> getDoctors(
+            @RequestParam(required = false) String specialty) {
+
+        List<Doctor> doctors = doctorService.getDoctorsBySpecialty(specialty);
+        return ResponseEntity.ok(doctors);
+    }
+}
+
+5. Test (Postman / Frontend)
+
+
+
+////////////////////// nâng cao ví dụ với hospital db 
+
+
+chuyển từ Entity → DTO để:
+
+ không lộ dữ liệu DB
+ trả response clean cho frontend
+ tránh circular reference / infinite JSON
+
+ 1. Vấn đề nếu KHÔNG dùng mapper
+Trả thẳng Entity:
+return doctorRepository.findAll();
+
+ Có thể lộ:
+
+password
+internal fields
+relations vòng (doctor → appointments → doctor → …)
+
+2. DTO (Data Transfer Object)
+
+ Chỉ chứa dữ liệu cần trả về frontend
+
+public class DoctorDTO {
+    private Long id;
+    private String firstName;
+    private String lastName;
+}
+
+3. Mapper (cách làm thủ công – dễ hiểu nhất)
+ Convert Entity → DTO
+public class DoctorMapper {
+
+    public static DoctorDTO toDTO(Doctor doctor) {
+        DoctorDTO dto = new DoctorDTO();
+        dto.setId(doctor.getDoctorId());
+        dto.setFirstName(doctor.getFirstName());
+        dto.setLastName(doctor.getLastName());
+        return dto;
+    }
+}
+
+
+Service dùng mapper
+public List<DoctorDTO> getAllDoctors() {
+    return doctorRepository.findAll()
+            .stream()
+            .map(DoctorMapper::toDTO)
+            .toList();
+}
+
+
+4. Controller trả DTO (chuẩn production)
+@GetMapping
+public List<DoctorDTO> getDoctors() {
+    return doctorService.getAllDoctors();
+}
+
+
+
+5. Mapper chuyên nghiệp (MapStruct – dùng trong công ty)
+Dependency:
+<dependency>
+    <groupId>org.mapstruct</groupId>
+    <artifactId>mapstruct</artifactId>
+    <version>1.5.5.Final</version>
+</dependency>
+Mapper interface:
+@Mapper(componentModel = "spring")
+public interface DoctorMapper {
+
+    DoctorDTO toDTO(Doctor doctor);
+
+    List<DoctorDTO> toDTOList(List<Doctor> doctors);
+}
+Service:
+public List<DoctorDTO> getDoctors() {
+    return doctorMapper.toDTOList(doctorRepository.findAll());
+}
+
+
+6. Flow tổng (rất quan trọng)
+Database (Entity)
+     ↓
+Repository
+     ↓
+Service
+     ↓
+Mapper (Entity → DTO)
+     ↓
+Controller
+     ↓
+Frontend (JSON sạch)
+
+
+7. Khi nào cần Mapper?
+
+✔ Project nhỏ → có thể skip DTO (nhưng không khuyến khích)
+✔ Project vừa/lớn → bắt buộc dùng DTO + Mapper
+✔ Production → luôn dùng MapStruct
+
+ 8. Tư duy quan trọng
+
+ Entity = database
+ DTO = data gửi ra ngoài
+ Mapper = cầu nối giữa 2 cái
 
