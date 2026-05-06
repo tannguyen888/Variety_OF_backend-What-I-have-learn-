@@ -240,6 +240,57 @@ Frontend (JSON sạch)
 
  8. Tư duy quan trọng
 
+
+
+
+folder tree thực tế jpa, springboot java 
+src/
+ └── main/
+     ├── java/com/example/hospital/
+     │
+     │   ├── controller/
+     │   │     ├── DoctorController.java
+     │   │     ├── PatientController.java
+     │   │     └── AdmissionController.java
+     │
+     │   ├── service/
+     │   │     ├── DoctorService.java
+     │   │     ├── impl/
+     │   │     │     └── DoctorServiceImpl.java
+     │   │     ├── PatientService.java
+     │   │     └── AdmissionService.java
+     │
+     │   ├── repository/
+     │   │     ├── DoctorRepository.java
+     │   │     ├── PatientRepository.java
+     │   │     └── AdmissionRepository.java
+     │
+     │   ├── entity/
+     │   │     ├── Doctor.java
+     │   │     ├── Patient.java
+     │   │     ├── Admission.java
+     │   │     └── Specialty.java
+     │
+     │   ├── dto/
+     │   │     ├── DoctorDTO.java
+     │   │     ├── PatientDTO.java
+     │   │     └── AdmissionDTO.java
+     │
+     │   ├── mapper/
+     │   │     ├── DoctorMapper.java
+     │   │     ├── PatientMapper.java
+     │   │     └── AdmissionMapper.java
+     │
+     │   ├── exception/
+     │   │     ├── GlobalExceptionHandler.java
+     │   │     └── ResourceNotFoundException.java
+     │
+     │   └── config/
+     │         └── AppConfig.java
+     │
+     └── resources/
+           ├── application.properties
+           └── data.sql
  Entity = database
  DTO = data gửi ra ngoài
  Mapper = cầu nối giữa 2 cái
