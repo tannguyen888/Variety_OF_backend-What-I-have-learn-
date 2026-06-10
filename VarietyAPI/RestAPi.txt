@@ -1,0 +1,567 @@
+Công nghệ     |      Chủ yếu dùng cho
+-------------------------------------------
+JSON REST API |	    Web app, mobile app
+GraphQL	      |      Frontend cần query linh hoạt
+gRPC	      |      Microservices, hiệu năng cao
+
+1////// REST API
+A REST API (Representational State Transfer Application Programming Interface) is an architectural style for designing networked applications. It enables communication between a client and a server over the internet using standard HTTP methods like GET, POST, PUT, PATCH, and DELETE. REST APIs are widely used for building web services due to their simplicity, scalability, and stateless nature.
+
+
+cách sử dụng:
+1/Frontend:
+
+fetch("/api/recipes/1")
+
+2/Backend:
+
+@GetMapping("/{id}")
+public RecipeDTO getRecipe(@PathVariable Long id){
+    return recipeService.getRecipe(id);
+}
+
+Response:
+
+{
+  "id": 1,
+  "name": "Pho",
+  "description": "Vietnamese noodle soup"
+}
+
+//////////////////////////////
+REST hoạt động như thế nào
+Client
+  ↓ HTTP
+Server
+  ↓ JSON
+Client
+
+
+các method: GET:lấy dữ liệu 
+PUT:cập nhật dữ liệu 
+DELETE:xóa dữ liệu 
+POST: tạo dữ liệu
+
+
+Nhược điểm
+Over-fetching: fetch dư ra, khi fe chỉ cần tìm kiếm mỗi tên của món ăn là Phở 
+{
+  "name": "Pho"
+}
+
+nhưng backend trả lại full json của món đó, gây ra tăng số lượng request 
+
+{
+  "id":1,
+  "name":"Pho",
+  "description":"...",
+  "ingredients":[...],
+  "steps":[...]
+}
+
+
+2/////////// GrapQl Api 
+
+GraphQL is an open‑source query language for APIs and a server‑side runtime that executes those queries using your existing data. Developed by Facebook in 2012 and open‑sourced in 2015, it offers a flexible, strongly‑typed schema that defines how data is structured and related, making APIs more predictable and efficient.
+
+-đơn thuần cái này đc sinh ra để giải quyết vấn đề của rest Api
+
+-> lấy field cần thiết đc yêu cầu, có thể giúp giảm tải request lên server 
+
+GraphQL:
+
+Request đc gợi là tìm name của recipe có id là 1
+
+query {
+  recipe(id:1){
+    name
+  }
+}
+
+Response trả đúng mỗi tên ko phải full bảng json của recipe
+
+{
+  "data": {
+    "recipe": {
+      "name": "Pho"
+    }
+  }
+}
+
+
+có thể lấy 2 object trong 1 request 
+Lấy nhiều object
+
+query {
+  recipe(id:1){
+    name
+  }
+
+  user(id:5){
+    username
+  }
+}
+
+//// cách set up trong springboot: 
+thêm 
+<dependency>
+   <groupId>org.springframework.boot</groupId>
+   <artifactId>spring-boot-starter-graphql</artifactId>
+</dependency>
+
+GraphQL
+
+Dùng annotation khác:
+
+@Controller
+@QueryMapping
+
+
+
+@Controller
+public class RecipeGraphQLController {
+
+    @QueryMapping
+    public Recipe recipe(@Argument Long id){
+        return recipeService.findById(id);
+    }
+}
+
+thì recipeService thực chất cũng giống hệt Service trong REST API thôi.
+
+Ví dụ:
+
+Service
+@Service
+public class RecipeService {
+
+    private final RecipeRepository recipeRepository;
+
+    public RecipeService(RecipeRepository recipeRepository) {
+        this.recipeRepository = recipeRepository;
+    }
+
+    public Recipe findById(Long id) {
+        return recipeRepository.findById(id)
+                .orElseThrow(() ->
+                        new RuntimeException("Recipe not found"));
+    }
+}
+
+
+Repository
+@Repository
+public interface RecipeRepository
+        extends JpaRepository<Recipe, Long> {
+}
+
+
+Entity
+
+
+@Entity
+@Table(name = "recipes")
+public class Recipe {
+
+    @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    private Long id;
+
+    private String name;
+
+    private String description;
+
+    // getters setters
+}
+
+
+
+Flow GraphQL
+
+Client gửi:
+
+query {
+    recipe(id: 1){
+        id
+        name
+        description
+    }
+}
+
+Spring sẽ chạy:
+
+RecipeGraphQLController
+        ↓
+RecipeService
+        ↓
+RecipeRepository
+        ↓
+MySQL
+
+
+
+///////// gRPC
+RPC, short for gRPC Remote Procedure Calls, is an open-source framework developed by Google that facilitates efficient communication between distributed systems and microservices. It allows client applications to directly invoke methods on server applications as if they were local, simplifying the creation of distributed systems. gRPC uses Protocol Buffers (protobuf) as its default serialization mechanism and HTTP/2 as its transport protocol, offering significant performance and flexibility advantages over traditional RESTful APIs.
+
+
+Ý tưởng
+
+REST
+
+JSON
+HTTP/1.1
+
+gRPC:gọi backend với số đã serialization 
+
+Protocol Buffers
+HTTP/2
+Binary
+
+Nhanh hơn REST rất nhiều.
+
+Ví dụ
+Bước 1
+
+Tạo file
+
+syntax = "proto3";
+
+service RecipeService {
+
+  rpc GetRecipe(RecipeRequest)
+      returns (RecipeResponse);
+}
+
+message RecipeRequest {
+  int64 id = 1;
+}
+
+message RecipeResponse {
+  int64 id = 1;
+  string name = 2;
+}
+Sinh code
+
+gRPC sẽ generate:
+
+RecipeRequest
+RecipeResponse
+RecipeServiceGrpc
+Server
+public class RecipeGrpcService
+        extends RecipeServiceGrpc.RecipeServiceImplBase {
+
+    @Override
+    public void getRecipe(
+            RecipeRequest request,
+            StreamObserver<RecipeResponse> responseObserver) {
+
+        RecipeResponse response =
+                RecipeResponse.newBuilder()
+                .setId(1)
+                .setName("Pho")
+                .build();
+
+        responseObserver.onNext(response);
+        responseObserver.onCompleted();
+    }
+}
+Client
+RecipeRequest request =
+        RecipeRequest.newBuilder()
+        .setId(1)
+        .build();
+
+RecipeResponse response =
+        blockingStub.getRecipe(request);
+
+
+ưu điểm là protocal buffer nhỏ hơn rất nhiều 
+✔ Rất nhanh
+
+✔ Ít bandwidth
+
+✔ Strong typing
+
+✔ HTTP/2
+
+✔ Streaming
+thay vì phải send đoạn json như {
+  "id":1,
+  "name":"Pho"
+}
+
+thì gRPC sẽ send 0102030405 (đẫ serialization)
+
+-------------------------------------------
+ Spring phân biệt gRPC như thế nào?
+
+Spring không tự “detect” gRPC.
+
+👉 Nó dựa vào:
+
+✔ 1. .proto file (contract)
+service RecipeService {
+  rpc GetRecipe (RecipeRequest) returns (RecipeResponse);
+}
+✔ 2. Code generated từ protobuf
+
+Sau khi build:
+
+RecipeServiceGrpc
+RecipeRequest
+RecipeResponse
+✔ 3. gRPC server runtime (Netty)
+
+Spring dùng:
+
+gRPC runtime (thường qua Netty)
+
+
+Ví dụ Spring gRPC service
+Service implementation
+@GrpcService
+public class RecipeGrpcService extends RecipeServiceGrpc.RecipeServiceImplBase {
+
+    private final RecipeService recipeService;
+
+    public RecipeGrpcService(RecipeService recipeService) {
+        this.recipeService = recipeService;
+    }
+
+    @Override
+    public void getRecipe(RecipeRequest request,
+                          StreamObserver<RecipeResponse> responseObserver) {
+
+        Recipe recipe = recipeService.findById(request.getId());
+
+        RecipeResponse response = RecipeResponse.newBuilder()
+                .setId(recipe.getId())
+                .setName(recipe.getName())
+                .build();
+
+        responseObserver.onNext(response);
+        responseObserver.onCompleted();
+    }
+}
+
+
+
+
+recipe-grpc-service/
+│
+├── src/main/java/com/example/recipe/
+│   │
+│   ├── config/
+│   │     └── GrpcServerConfig.java
+│   │
+│   ├── grpc/
+│   │     └── RecipeGrpcService.java   👈 gRPC layer (controller replacement)
+│   │
+│   ├── service/
+│   │     └── RecipeService.java       👈 business logic
+│   │
+│   ├── repository/
+│   │     └── RecipeRepository.java    👈 JPA / DB
+│   │
+│   ├── entity/
+│   │     └── Recipe.java
+│   │
+│   ├── mapper/
+│   │     └── RecipeMapper.java
+│   │
+│   └── RecipeApplication.java
+│
+├── src/main/resources/
+│   └── application.yml
+│
+├── src/main/proto/
+│   └── recipe.proto                   👈 gRPC contract (VERY IMPORTANT)
+│
+├── target/generated-sources/protobuf/ 👈 auto-generated code
+│
+└── pom.xml
+
+
+.proto file (core của gRPC)
+
+📍 src/main/proto/recipe.proto
+
+syntax = "proto3";
+
+option java_multiple_files = true;
+option java_package = "com.example.recipe.grpc";
+option java_outer_classname = "RecipeProto";
+
+service RecipeService {
+
+  rpc GetRecipe (RecipeRequest)
+      returns (RecipeResponse);
+
+  rpc CreateRecipe (CreateRecipeRequest)
+      returns (RecipeResponse);
+}
+
+message RecipeRequest {
+  int64 id = 1;
+}
+
+message CreateRecipeRequest {
+  string name = 1;
+  string description = 2;
+}
+
+message RecipeResponse {
+  int64 id = 1;
+  string name = 2;
+  string description = 3;
+}
+ -----> 3. Generated code (Spring không viết file này)
+
+Sau khi build:
+
+RecipeServiceGrpc
+RecipeRequest
+RecipeResponse
+CreateRecipeRequest
+-------------------------------------------------------------------------------------------------
+gRPC Service (controller replacement)
+
+📍 grpc/RecipeGrpcService.java
+
+@GrpcService
+public class RecipeGrpcService extends RecipeServiceGrpc.RecipeServiceImplBase {
+
+    private final RecipeService recipeService;
+
+    public RecipeGrpcService(RecipeService recipeService) {
+        this.recipeService = recipeService;
+    }
+
+    @Override
+    public void getRecipe(RecipeRequest request,
+                          StreamObserver<RecipeResponse> responseObserver) {
+
+        Recipe recipe = recipeService.findById(request.getId());
+
+        RecipeResponse response = RecipeResponse.newBuilder()
+                .setId(recipe.getId())
+                .setName(recipe.getName())
+                .setDescription(recipe.getDescription())
+                .build();
+
+        responseObserver.onNext(response);
+        responseObserver.onCompleted();
+    }
+
+    @Override
+    public void createRecipe(CreateRecipeRequest request,
+                             StreamObserver<RecipeResponse> responseObserver) {
+
+        Recipe recipe = recipeService.create(
+                request.getName(),
+                request.getDescription()
+        );
+
+        RecipeResponse response = RecipeResponse.newBuilder()
+                .setId(recipe.getId())
+                .setName(recipe.getName())
+                .setDescription(recipe.getDescription())
+                .build();
+
+        responseObserver.onNext(response);
+        responseObserver.onCompleted();
+    }
+}
+-------------------------------------------------------------------------------------------
+🧠 5. Business Service (logic thật)
+
+📍 service/RecipeService.java
+
+@Service
+public class RecipeService {
+
+    private final RecipeRepository repository;
+
+    public RecipeService(RecipeRepository repository) {
+        this.repository = repository;
+    }
+
+    public Recipe findById(Long id) {
+        return repository.findById(id)
+                .orElseThrow(() -> new RuntimeException("Not found"));
+    }
+
+    public Recipe create(String name, String description) {
+        Recipe recipe = new Recipe();
+        recipe.setName(name);
+        recipe.setDescription(description);
+
+        return repository.save(recipe);
+    }
+}
+-------------------------------------------------------------------------------
+🗄️ 6. Entity (DB layer)
+
+📍 entity/Recipe.java
+
+@Entity
+@Table(name = "recipes")
+public class Recipe {
+
+    @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    private Long id;
+
+    private String name;
+    private String description;
+}
+---------------------------------------------------------------------------------------
+🧾 7. Repository
+@Repository
+public interface RecipeRepository extends JpaRepository<Recipe, Long> {
+}
+----------------------------------------------------------------------------------
+⚙️ 8. Config gRPC server
+
+📍 config/GrpcServerConfig.java
+
+@Configuration
+public class GrpcServerConfig {
+    // thường chỉ cần dependency spring boot starter là đủ
+}
+-------------------------------------------------------------------------------------
+⚙️ 9. application.yml
+server:
+  port: 8080
+
+grpc:
+  server:
+    port: 9090
+------------------------------------------------------------------------------------------------------------------
+🧭 10. Flow tổng hệ thống
+REST vs gRPC trong cùng mindset:
+gRPC Client
+   ↓ (HTTP/2 binary)
+RecipeGrpcService
+   ↓
+RecipeService (business logic)
+   ↓
+Repository
+   ↓
+MySQL
+
+
+---> gRPC ko thay structure cua he thống 
+chỉ thay đổi controller (rest) sang gRPC service 
+
+14. Khi nào dùng gRPC trong system của bạn
+
+✔ Microservices communication
+✔ AI service (OpenAI wrapper)
+✔ High performance internal APIs
+✔ Streaming data (chat, token AI)
+
+
+
+
