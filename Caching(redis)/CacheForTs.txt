@@ -1,0 +1,83 @@
+tải dependency cho dự án 
+npm install redis
+
+b2: lưu các key quan trong ở file .env 
+REDIS_PASSWORD=*******
+REDIS_HOST=holiday-megasweet-neosafe-69483.db.redis.io
+REDIS_PORT=127.0.0.1
+
+tất cả thông tin đc lấy từ account trên web redis 
+
+b3 coding implement
+tạo 
+lib/RedisConnect.js
+--> thêm code template 
+import { createClient } from 'redis';
+
+
+const client = createClient({
+    username: 'default',
+    password: process.env.REDIS_PASSWORD,
+    socket: {
+        host: process.env.REDIS_HOST,
+        port: process.env.REDIS_PORT
+    }
+});
+if(!client.isOpen) {
+    await client.connect();
+}
+
+
+
+client.on('error', err => console.log('Redis Client Error', err));
+
+
+
+export { client }
+
+
+b4 tạo action cho element 
+ví dụ /create 
+
+'use server'
+
+// import { client } from "@/lib/db"
+import { redirect } from 'next/navigation'
+
+export async function createBook(formData) {
+  const {title, rating, author, blurb} = Object.fromEntries(formData)
+   
+  //id 
+  const id = Math.floor(Math.random() * 1000000);
+
+  //add sort key for sorted set
+  const unique  = await client.zAdd('books', {
+    score: id,
+    value: `book:${id}`
+  },{NX: true})
+
+
+  if(!unique) {
+    throw new Error('Book already exists')
+  }
+
+  //save to redis
+
+  await client.hSet(`book:${id}`, {
+    title,
+    rating,
+    author,
+    blurb
+  })
+  
+  redirect(`/`)
+  
+}
+
+
+trick code dễ nhớ là code sử dụng câu lệnh truy vấn dành riêng cho redis trong từng ngôn ngữ 
+hSet, hGet,... 
+
+redirect(`/`) --> trả user lại page home
+
+  

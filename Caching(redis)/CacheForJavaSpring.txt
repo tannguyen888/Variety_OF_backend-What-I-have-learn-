@@ -1,0 +1,132 @@
+Spring Boot
+   │
+   ├── MySQL  (database chính)
+   │
+   └── Redis  (cache)
+1. Thêm dependency
+Maven
+<dependency>
+    <groupId>org.springframework.boot</groupId>
+    <artifactId>spring-boot-starter-data-redis</artifactId>
+</dependency>
+
+<dependency>
+    <groupId>com.mysql</groupId>
+    <artifactId>mysql-connector-j</artifactId>
+</dependency>
+
+<dependency>
+    <groupId>org.springframework.boot</groupId>
+    <artifactId>spring-boot-starter-data-jpa</artifactId>
+</dependency>
+2. Cấu hình MySQL
+
+application.properties
+
+spring.datasource.url=jdbc:mysql://localhost:3306/flownote
+spring.datasource.username=root
+spring.datasource.password=password
+
+spring.jpa.hibernate.ddl-auto=update
+3. Cấu hình Redis
+spring.data.redis.host=localhost
+spring.data.redis.port=6379
+4. Tạo Entity
+@Entity
+public class Book {
+
+    @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    private Long id;
+
+    private String title;
+
+    private String author;
+
+    // getter setter
+}
+5. Repository MySQL
+@Repository
+public interface BookRepository
+        extends JpaRepository<Book, Long> {
+}
+6. Sử dụng RedisTemplate
+@Service
+@RequiredArgsConstructor
+public class BookService {
+
+    private final BookRepository bookRepository;
+    private final RedisTemplate<String, Object> redisTemplate;
+
+    public Book getBook(Long id) {
+
+        String key = "book:" + id;
+
+        Book cachedBook =
+            (Book) redisTemplate.opsForValue().get(key);
+
+        if (cachedBook != null) {
+            System.out.println("FROM REDIS");
+            return cachedBook;
+        }
+
+        Book book = bookRepository.findById(id)
+                .orElseThrow();
+
+        redisTemplate.opsForValue()
+                .set(key, book, Duration.ofMinutes(10));
+
+        System.out.println("FROM MYSQL");
+
+        return book;
+    }
+}
+Luồng hoạt động
+
+Lần đầu:
+
+GET /books/1
+
+Redis ❌
+   ↓
+MySQL ✅
+   ↓
+Save Redis
+   ↓
+Return
+
+Lần thứ hai:
+
+GET /books/1
+
+Redis ✅
+   ↓
+Return
+
+Không cần query MySQL nữa.
+
+Cách đơn giản hơn với @Cacheable
+
+Bật cache:
+
+@SpringBootApplication
+@EnableCaching
+public class Application {
+}
+
+Service:
+
+@Cacheable(value = "books", key = "#id")
+public Book getBook(Long id) {
+    return bookRepository.findById(id)
+            .orElseThrow();
+}
+
+Spring Boot sẽ:
+
+Lần 1 -> MySQL
+Lần 2 -> Redis
+Lần 3 -> Redis
+...
+
+tự động.

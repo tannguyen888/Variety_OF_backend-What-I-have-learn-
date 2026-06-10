@@ -1,0 +1,224 @@
+Redis là gì?
+-Redis là in-memory data, tối ưu vì chạy trên RAM
+-thường dùng làm cache
+-làm dữ liệu tạm thời
+
+->> Redis đc so sánh nhanh hơn MySQL và PostgreSQL
+do DB thường đọc disk -> chậm hơn
+
+Redis thường đọc qua ram -> nhanh hơn
+
+Thông thường Redis chỉ dùng để lưu cache, session login, OTP, queue, Realtime 
+-> do tính chất của ram có tốc độ đọc cao và lưu tạm nên khi reset máy lại thì dữ liệu sẽ mất
+---> không nên dùng Redis để lưu data quan trọng 
+
+Flow cache cơ bản:
+❌ Không cache
+Client → API → Database
+
+✅ Có Redis
+Client → API → Redis
+                ↓ miss
+             Database
+
+redis_DB
+-data pesistance 
+-json support
+-search
+-redis OM  - objec mapping
+
+
+-- các kiểu data type 
+STRING
+ví dụ 
+name --> 'mario'
+age --> '30'
+
+command tạo ra string 
+-----------------------
+SET token abc
+GET token
+
+tạo ra list string command 
+MSET abc zxy gugu kkk -> 1 lệnh tạo ra nhiều strings 
+
+GETRANGE + tên string index (from to)
+GETRANGE name -3-1
+"rio"
+
+GETRANGE + tên string index (from to)
+GETRANGE + name 0 3 
+"mari"
+
+MGET + tên strings
+MGET adc xyz gg 
+trả lại 1 sets
+
+
+//// cách tăng đơn vị trong string 
+INCR + tên string đã có sẵn
+
+ví dụ 
+SET view 10
+INCR view
+
+kết quả 
+11
+
+/// cách giảm đơn vị trong string 
+SET view 10
+DECR view 
+
+kết quả:
+9
+=============================
+nâng cấp nếu muốn tăng theo số mong muôn
+SET view 10
+INCRBY view 5
+
+kết quả 
+15
+
+/// giảm 
+SET view 11
+DECR view 3
+
+kết quả 
+8
+
+
+// option sau tên 
+(EX, NX, XX)
+1. EX = Expire Time
+
+ đặt thời gian tự xóa (seconds)
+
+SET token abc EX 10
+
+ nghĩa là:
+
+key "token" sẽ tự xóa sau 10 giây
+
+Use case:
+OTP
+login session
+cache
+
+Check:
+TTL token
+======================================
+-------------------------------------
+NX = Only Set If NOT Exists
+
+👉 chỉ set nếu key chưa tồn tại
+
+Example
+SET username Erik NX
+Nếu key chưa có:
+✅ set thành công
+Nếu key đã tồn tại:
+❌ không overwrite
+--------------------------------------
+
+---------------------------
+Use case cực quan trọng:
+Distributed Lock
+SET lock true NX EX 10
+
+👉 nghĩa là:
+
+chỉ 1 process lấy được lock
+lock tự hết hạn sau 10s
+-----------------------------
+-----------------------------------------
+XX = Only Set If EXISTS
+
+👉 chỉ set nếu key đã tồn tại
+
+Example
+SET username Kyle XX
+Nếu key tồn tại:
+
+✅ update
+
+Nếu key chưa tồn tại:
+
+❌ fail
+-------------------------------------------
+4. COMBINE OPTIONS
+Example:
+SET session abc EX 60 NX
+Ý nghĩa:
+chỉ tạo session nếu chưa có
+tự expire sau 60s
+------------------------------------------
+
+
+
+SET
+names -->{'mario','luigi', 'peach'}
+
+command tạo ra set 
+----------------------
+SADD tags java
+SADD tags redis
+SMEMBERS tags
+----------------------
+
+HASH
+book -->{
+title:'hello from void'
+author: 'ntp'
+}
+
+command tạo ra hassh 
+-----------------------
+HSET user:1 name Erik
+HSET user:1 age 22
+HGETALL user:1
+-----------------------
+
+LIST (giống array, queue)
+names -->{'mario','luigi', 'peach'}
+
+command tạo list
+-------------------
+RPUSH: push items to the right of the list
+
+
+---------------
+--------------------
+LPUSH tasks task1
+LRANGE tasks 0 -1
+--------------------
+
+SORTED SET
+names --{
+'mảio': 1,
+'kkk':2,
+'llll': 3
+}
+
+command tạo ra sorted set
+để tránh bị trùng title hoặc tên
+----------------------------
+ZADD leaderboard 100 Erik
+
+--> ZADD books NX 1 "remote friend" //sẽ ko update nếu book đã tồn tại
+
+
+---> ZRANGE books 0 1 hoặc là -2 -1// đít tới đầu 
+----------------------------
+
+5. TTL / EXPIRE
+
+Redis rất mạnh ở:
+
+dữ liệu tự hết hạn
+-----------------------
+Example
+SET otp 123456 EX 30
+-------------------------
+ sau 30 giây tự xóa
+
+

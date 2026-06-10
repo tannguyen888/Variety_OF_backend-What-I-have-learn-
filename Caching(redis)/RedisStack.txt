@@ -1,0 +1,211 @@
+Redis Stack là bản mở rộng mạnh hơn redis thường, tổng quan thì dùng để làm cache database search vector AI trong cùng 1 hệ thống 
+
+
+
+Khi nào dùng redis Thường 
+redis lúc này là in-memory db siêu nhanh
+
+dùng để:
+cache Api
+Session login
+queue
+rate limiting
+
+Key value rất đơn giản 
+SET user:1"erik"
+
+GET user:1
+
+
+Redis Stack 
+bao gồm cách Redis core
+Redis JSON
+RedisSearch (search full-text)
+RedisTimeSeries(time data)
+RedisBloom (filter nhanh)
+Vector Search(AI embedding search)
+
+
+
+
+//cách cài đặt redis Stack
+bằng Docker 
+cách nhanh nhất (Docker)
+docker run -d \
+  --name redis-stack \
+  -p 6379:6379 \
+  -p 8001:8001 \
+  redis/redis-stack:latest
+mở UI (RedisInsight)
+http://localhost:8001
+
+👉 xem data, query, debug rất dễ
+
+6. Setup Redis Stack với Spring Boot
+pom.xml
+
+dependency:
+<dependency>
+    <groupId>org.springframework.boot</groupId>
+    <artifactId>spring-boot-starter-data-redis</artifactId>
+</dependency>
+
+file/ config:
+spring:
+  data:
+    redis:
+      host: localhost
+      port: 6379
+
+
+Redis template
+
+
+cách viết service đầy đủ crud template cho Redis stack
+
+
+
+@Service
+public class RedisService {
+
+    private final StringRedisTemplate redisTemplate;
+
+    public RedisService(StringRedisTemplate redisTemplate) {
+        this.redisTemplate = redisTemplate;
+    }
+
+    // SET
+    public void set(String key, String value, Duration ttl) {
+        redisTemplate.opsForValue().set(key, value, ttl);
+    }
+
+    // GET
+    public String get(String key) {
+        return redisTemplate.opsForValue().get(key);
+    }
+
+    // DELETE
+    public void delete(String key) {
+        redisTemplate.delete(key);
+    }
+
+    // EXISTS
+    public boolean exists(String key) {
+        return Boolean.TRUE.equals(redisTemplate.hasKey(key));
+    }
+}
+
+
+khi sử dụng Redis và Mysql 
+3. Cách hoạt động đúng (Redis + MySQL)
+📌 GET data (quan trọng nhất)
+public Recipe getRecipe(Long id) {
+
+    String key = "recipe:" + id;
+
+    // 1. check Redis trước
+    String cached = redisService.get(key);
+
+    if (cached != null) {
+        return JsonUtil.fromJson(cached, Recipe.class);
+    }
+
+    // 2. nếu không có → query MySQL
+    Recipe recipe = recipeRepository.findById(id)
+            .orElseThrow(() -> new RuntimeException("Not found"));
+
+    // 3. lưu vào Redis
+    redisService.set(
+        key,
+        JsonUtil.toJson(recipe),
+        Duration.ofHours(1)
+    );
+
+    return recipe;
+}
+
+
+4. Cách SAVE data (write strategy)
+
+Có 2 kiểu phổ biến:
+
+🟢 Option A (simple): Write DB trước → update Redis
+public Recipe saveRecipe(Recipe recipe) {
+
+    // 1. save DB
+    Recipe saved = recipeRepository.save(recipe);
+
+    // 2. update cache
+    redisService.set(
+        "recipe:" + saved.getId(),
+        JsonUtil.toJson(saved),
+        Duration.ofHours(1)
+    );
+
+    return saved;
+}
+🟡 Option B (advanced): Write DB only (lazy cache)
+save → MySQL only
+read → Redis cache
+
+👉 cache chỉ tạo khi read lần đầu
+
+
+
+cách chức năng chính trong redis stack 
+RedisJson dung để lưu ọbject JSON
+
+cái query trên redis Stack dùng để tương tác JSON là 
+JSON.SET recipe:1 $'{
+"name":"Pho",
+"ingredients":["beef","noodle"],
+"time":30
+}'
+
+get json
+JSON.GET recipe:1
+
+update field
+JSON.SET recipe:1 $.time 25
+
+
+..> thực tế cách sử dụng trong spring boot 
+
+@Service
+public class RecipeCacheService {
+
+    private final StringRedisTemplate redisTemplate;
+    private final ObjectMapper objectMapper;
+
+    public RecipeCacheService(StringRedisTemplate redisTemplate,
+                              ObjectMapper objectMapper) {
+        this.redisTemplate = redisTemplate;
+        this.objectMapper = objectMapper;
+    }
+
+    public void saveRecipe(RecipeDTO recipe) {
+        try {
+            String json = objectMapper.writeValueAsString(recipe);
+            redisTemplate.opsForValue().set(
+                "recipe:" + recipe.getId(),
+                json,
+                Duration.ofHours(1)
+            );
+        } catch (Exception e) {
+            throw new RuntimeException(e);
+        }
+    }
+
+    public RecipeDTO getRecipe(Long id) {
+        String json = redisTemplate.opsForValue().get("recipe:" + id);
+
+        if (json == null) return null;
+
+        try {
+            return objectMapper.readValue(json, RecipeDTO.class);
+        } catch (Exception e) {
+            return null;
+        }
+    }
+}
+
